@@ -6,7 +6,7 @@ use strict;
 use LWP::UserAgent;
 use XML::Simple;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 sub new {
 	my ($class, %args) = @_;
@@ -20,30 +20,30 @@ sub init {
 	$self->{'ua'} = LWP::UserAgent->new;
 	$self->{'valid_requests'} = {
 		'FindFeeds' => {
-			'url' => 'http://api.feedburner.com/management/1.0/FindFeeds',
+			'url' => 'https://api.feedburner.com/management/1.0/FindFeeds',
 			'args' => [qw/user password/],
 		},
 		'GetFeed' => {
-			'url' => 'http://api.feedburner.com/management/1.0/GetFeed',
+			'url' => 'https://api.feedburner.com/management/1.0/GetFeed',
 			'args' => [qw/user password id/],
 		},
 		'AddFeed' => {
-			'url' => 'http://api.feedburner.com/management/1.0/AddFeed',
+			'url' => 'https://api.feedburner.com/management/1.0/AddFeed',
 			'args' => [qw/user password feed/],
 			'type' => 'post',
 		},
 		'DeleteFeed' => {
-			'url' => 'http://api.feedburner.com/management/1.0/DeleteFeed',
+			'url' => 'https://api.feedburner.com/management/1.0/DeleteFeed',
 			'args' => [qw/user password id/],
 			'type' => 'post',
 		},
 		'ResyncFeed' => {
-			'url' => 'http://api.feedburner.com/management/1.0/ResyncFeed',
+			'url' => 'https://api.feedburner.com/management/1.0/ResyncFeed',
 			'args' => [qw/user password id/],
 			'type' => 'post',
 		},
 		'ModifyFeed' => {
-			'url' => 'http://api.feedburner.com/management/1.0/ModifyFeed',
+			'url' => 'https://api.feedburner.com/management/1.0/ModifyFeed',
 			'args' => [qw/user password feed/],
 			'type' => 'post',
 		},
