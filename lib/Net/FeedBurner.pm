@@ -6,7 +6,7 @@ use strict;
 use LWP::UserAgent;
 use XML::Simple;
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 sub new {
 	my ($class, %args) = @_;
@@ -56,7 +56,7 @@ sub urlbuilder {
 		die 'Requesting unknown request type : '.$type;
 	}
 	my $url = $self->{'valid_requests'}{$type}{'url'};
-	if ($self->{'valid_requests'}{$type}{'args'}) {
+	if ($self->{'valid_requests'}{$type}{'args'} && ! $self->{'valid_requests'}{$type}{'type'}) {
 		$url .= '?'.(join q{&}, map { $_.'='.($self->{$_} || $args{$_} || '')  } @{ $self->{'valid_requests'}{$type}{'args'} } );
 	}
 	return $url;
@@ -135,7 +135,10 @@ sub add_feed {
 sub delete_feed {
 	my ($self, $id) = @_;
 	my $ref = $self->request(
-		'url' => $self->urlbuilder('DeleteFeed', 'id' => $id),
+		'url' => $self->urlbuilder('DeleteFeed'),
+		'form' => {
+			'id' => $id,
+		}
 	);
 	return 0;
 }
@@ -162,7 +165,10 @@ sub modify_feed {
 sub resync_feed {
 	my ($self, $id) = @_;
 	my $ref = $self->request(
-		'url' => $self->urlbuilder('ResyncFeed', 'id' => $id),
+		'url' => $self->urlbuilder('ResyncFeed'),
+		'form' => {
+			'id' => $id,
+		}
 	);
 	return 0;
 }
@@ -174,14 +180,17 @@ Net::FeedBurner - The great new Net::FeedBurner!
 =head1 SYNOPSIS
 
     use Net::FeedBurner;
-    my $feedburner = Net::FeedBurner->new();
+    my $feedburner = Net::FeedBurner->new(
+	  'user' => 'username',
+	  'password' => 'password',
+	);
 	$feeds = $fb->find_feeds();
 	my $feed_id = (keys %{$feeds})[0];
 	$feedinfo = $fb->get_feed($feed_id);
 	# ...
 	my $feed = <<'EOF'
-	<feed uri="manormouse" title="Man | Mouse">
-	  <source url="http://manormouse.blogspot.com/atom.xml"/>
+	<feed uri="socklabs-blog" title="Nick's Blog">
+	  <source url="http://blog.socklabs.com/atom.xml"/>
 	  <services>
 	    <service class="ItemStats" />
 	    <service class="SmartFeed" />
