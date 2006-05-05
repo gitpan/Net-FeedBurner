@@ -1,3 +1,5 @@
+# $Id: $ $Revision: $ $Source: $ $Date: $
+
 package Net::FeedBurner;
 
 use warnings;
@@ -6,7 +8,7 @@ use strict;
 use LWP::UserAgent;
 use XML::Simple;
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 sub new {
 	my ($class, %args) = @_;
@@ -48,6 +50,7 @@ sub init {
 			'type' => 'post',
 		},
 	};
+	return 1;
 }
 
 sub urlbuilder {
@@ -57,7 +60,7 @@ sub urlbuilder {
 	}
 	my $url = $self->{'valid_requests'}{$type}{'url'};
 	if ($self->{'valid_requests'}{$type}{'args'} && ! $self->{'valid_requests'}{$type}{'type'}) {
-		$url .= '?'.(join q{&}, map { $_.'='.($self->{$_} || $args{$_} || '')  } @{ $self->{'valid_requests'}{$type}{'args'} } );
+		$url .= q{?}.(join q{&}, map { $_.q{=}.($self->{$_} || $args{$_} || q{})  } @{ $self->{'valid_requests'}{$type}{'args'} } );
 	}
 	return $url;
 }
@@ -71,13 +74,14 @@ sub request {
 		$response = $self->{'ua'}->get($args{'url'});
 	}
 	if (! $response->is_success) {
-		die join q{}, 'Bad response: ', $response->code, ' - ', $response->status_line;
+		die join q{}, 'Bad response: ', $response->code, ' - ', $response->status_line, ' - ', $args{'url'};
 	}
 	my $xs = XML::Simple->new();
 	my $ref = $xs->XMLin($response->content, %{$args{'xargs'}});
 	if ($ref->{'stat'} ne 'ok') {
-		die Data::Dumper::Dumper($ref->{'error'});
+		die Data::Dumper::Dumper($ref);
 	}
+	$self->{'rawxml'} = $response->content;
 	return $ref;
 }
 
@@ -106,9 +110,9 @@ sub get_feed {
 	);
 	my %feed = (
 		'url' => $ref->{'feed'}{'source'}{'url'},
-		'id' => $ref->{'feed'}{'source'}{'id'},
-		'title' => $ref->{'feed'}{'source'}{'title'},
-		'uri' => $ref->{'feed'}{'source'}{'uri'},
+		'id' => $ref->{'feed'}{'id'},
+		'title' => $ref->{'feed'}{'title'},
+		'uri' => $ref->{'feed'}{'uri'},
 	);
 	return \%feed;
 }
@@ -121,13 +125,14 @@ sub add_feed {
 			'feed' => $feed,
 			'user' => $self->{'user'},
 			'password' => $self->{'password'},
-		}
+		},
+		'type' => 'post',
 	);
 	my %feed = (
 		'url' => $ref->{'feed'}{'source'}{'url'},
-		'id' => $ref->{'feed'}{'source'}{'id'},
-		'title' => $ref->{'feed'}{'source'}{'title'},
-		'uri' => $ref->{'feed'}{'source'}{'uri'},
+		'id' => $ref->{'feed'}{'id'},
+		'title' => $ref->{'feed'}{'title'},
+		'uri' => $ref->{'feed'}{'uri'},
 	);
 	return \%feed;
 }
@@ -138,7 +143,8 @@ sub delete_feed {
 		'url' => $self->urlbuilder('DeleteFeed'),
 		'form' => {
 			'id' => $id,
-		}
+		},
+		'type' => 'post',
 	);
 	return 0;
 }
@@ -151,13 +157,14 @@ sub modify_feed {
 			'feed' => $feed,
 			'user' => $self->{'user'},
 			'password' => $self->{'password'},
-		}
+		},
+		'type' => 'post',
 	);
 	my %feed = (
 		'url' => $ref->{'feed'}{'source'}{'url'},
-		'id' => $ref->{'feed'}{'source'}{'id'},
-		'title' => $ref->{'feed'}{'source'}{'title'},
-		'uri' => $ref->{'feed'}{'source'}{'uri'},
+		'id' => $ref->{'feed'}{'id'},
+		'title' => $ref->{'feed'}{'title'},
+		'uri' => $ref->{'feed'}{'uri'},
 	);
 	return \%feed;
 }
@@ -168,10 +175,16 @@ sub resync_feed {
 		'url' => $self->urlbuilder('ResyncFeed'),
 		'form' => {
 			'id' => $id,
-		}
+		},
+		'type' => 'post',
 	);
 	return 0;
 }
+
+1;
+__END__
+
+=pod
 
 =head1 NAME
 
@@ -179,27 +192,13 @@ Net::FeedBurner - The great new Net::FeedBurner!
 
 =head1 SYNOPSIS
 
-    use Net::FeedBurner;
-    my $feedburner = Net::FeedBurner->new(
-	  'user' => 'username',
-	  'password' => 'password',
-	);
-	$feeds = $fb->find_feeds();
-	my $feed_id = (keys %{$feeds})[0];
-	$feedinfo = $fb->get_feed($feed_id);
-	# ...
-	my $feed = <<'EOF'
-	<feed uri="socklabs-blog" title="Nick's Blog">
-	  <source url="http://blog.socklabs.com/atom.xml"/>
-	  <services>
-	    <service class="ItemStats" />
-	    <service class="SmartFeed" />
-	  </services>
-	</feed>
-	EOF
-	if (my $newfeed = $feedburner->add_feed($feed)) {
-		print Data::Dumper::Dumper( $fb->get_feed($newfeed->{'id'}) );
-	}
+  use Net::FeedBurner;
+  my $fb = Net::FeedBurner->new('user' => $user, 'password' => $password);
+  my $feeds = $fb->find_feeds();
+  my $feed_id = (keys %{$feeds})[0];
+  my $feedinfo = $fb->get_feed($feed_id);
+  my $feedxml = '<feed ... />'; # See t/20-usage.t for more complex usage examples
+  $feedburner->modify_feed($feedxml);
 
 =head1 FUNCTIONS
 
@@ -210,7 +209,7 @@ abstraction layer to make using the FeedBurner API easier for perl developers.
 
 =head2 new
 
-Creates the Net::FeedBurner object.
+Creates and returns a Net::FeedBurner object.
 
 =head2 init
 
@@ -249,6 +248,15 @@ Use the API to allow the user to modify a feed in their account.
 Use the API to allow the user to resync a feed in their account. This will
 involves clearing the cache, resetting any podcast media enclosures, and
 informing the caller of any feed formatting problems.
+
+=head1 CAVEATS
+
+After a request it will store the original xmldata for later use.
+
+  my $fb = Net::FeedBurner->new( ... );
+  my $fb->get_feed(1234);
+  my $xml = $fb->{'rawxml};
+  # ...
 
 =head1 AUTHOR
 
@@ -310,5 +318,3 @@ This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
 
 =cut
-
-1;
