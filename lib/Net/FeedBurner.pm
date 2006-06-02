@@ -8,7 +8,7 @@ use strict;
 use LWP::UserAgent;
 use XML::Simple;
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 sub new {
 	my ($class, %args) = @_;
@@ -91,10 +91,12 @@ sub find_feeds {
 		'url' => $self->urlbuilder('FindFeeds'),
 		'xargs' => {
 			'KeyAttr' => [qw/feeds/],
+			'ForceArray' => [qw/feed/],
 		}
 	);
-	my %feeds = map {
-		$_->{'id'} => {
+	my %feeds;
+	map {
+		$feeds{$_->{'id'}} = {
 			'id' => $_->{'id'},
 			'title' => $_->{'title'},
 			'uri' => $_->{'uri'},
