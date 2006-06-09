@@ -8,7 +8,24 @@ use strict;
 use LWP::UserAgent;
 use XML::Simple;
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
+
+my %xmlencode = (
+    q{&} => 'amp',
+    q{<} => 'lt',
+    q{>} => 'gt',
+    q{"} => 'quot',
+    q{'} => 'apos',
+);
+
+my $xmlpattern = join q{|}, keys %xmlencode;
+
+sub _process {
+    my ($class, @xmldata) = @_;
+    my $data = join q{}, map { defined $_ ? $_ : q{} } @xmldata;
+    $data =~ s/($xmlpattern)/&$xmlencode{$1};/goxm;
+    return $data;
+}
 
 sub new {
 	my ($class, %args) = @_;
@@ -79,7 +96,9 @@ sub request {
 	my $xs = XML::Simple->new();
 	my $ref = $xs->XMLin($response->content, %{$args{'xargs'}});
 	if ($ref->{'stat'} ne 'ok') {
-		die Data::Dumper::Dumper($ref);
+		print STDERR Data::Dumper::Dumper($ref);
+		print STDERR $response->content;
+		die 'ERROR ' . $ref->{'err'}->{'code'} . ' - ' . $ref->{'err'}->{'msg'};
 	}
 	$self->{'rawxml'} = $response->content;
 	return $ref;
@@ -163,12 +182,20 @@ sub modify_feed {
 		'type' => 'post',
 	);
 	my %feed = (
-		'url' => $ref->{'feed'}{'source'}{'url'},
 		'id' => $ref->{'feed'}{'id'},
 		'title' => $ref->{'feed'}{'title'},
 		'uri' => $ref->{'feed'}{'uri'},
 	);
 	return \%feed;
+}
+
+sub modify_feed_source {
+	my ($self, $id, $newurl) = @_;
+	my $origfeed = $self->get_feed($id);
+    my $newfeedxml = '<feed id="' . $id . '" uri="' . $origfeed->{'uri'} . '" title="' . $origfeed->{'title'} . '"><source url="' . $self->_process($newurl) . '" /></feed>';
+	my $newfeed = $self->modify_feed($newfeedxml);
+	if (! $newfeed) { return 0; }
+    return $newfeed->{'id'} eq $origfeed->{'id'} ? 1 : 0;
 }
 
 sub resync_feed {
@@ -180,7 +207,7 @@ sub resync_feed {
 		},
 		'type' => 'post',
 	);
-	return 0;
+	return 1;
 }
 
 1;
@@ -193,6 +220,8 @@ __END__
 Net::FeedBurner - The great new Net::FeedBurner!
 
 =head1 SYNOPSIS
+
+Why? Because its Great! And New!
 
   use Net::FeedBurner;
   my $fb = Net::FeedBurner->new('user' => $user, 'password' => $password);
@@ -250,6 +279,11 @@ Use the API to allow the user to modify a feed in their account.
 Use the API to allow the user to resync a feed in their account. This will
 involves clearing the cache, resetting any podcast media enclosures, and
 informing the caller of any feed formatting problems.
+
+=head2 modify_feed_source
+
+A non-standard function to assist in changing the source url of a FeedBurner
+feed.
 
 =head1 CAVEATS
 

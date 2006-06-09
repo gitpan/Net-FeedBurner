@@ -1,3 +1,5 @@
+#!/usr/bin/perl
+
 use strict;
 use warnings;
 use Module::Build;
@@ -11,6 +13,8 @@ my $builder = Module::Build->new(
 		'Test::More' => 0,
 		'XML::Simple' => 0,
 		'LWP::UserAgent' => 0,
+		'URI::Escape' => 0,
+		'URI::Split' => 0,
 	},
 	add_to_cleanup      => [ 'Net-FeedBurner-*' ],
 	get_options => {

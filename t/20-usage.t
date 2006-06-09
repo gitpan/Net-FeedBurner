@@ -3,12 +3,13 @@
 use strict;
 use warnings;
 
-use Module::Build;
 use Test::More;
-use English;
 
-eval { use XML::LibXML; };
-if ( $EVAL_ERROR ) { plan skip_all => 'This set of tests requires XML::LibXML'; }
+use URI::Escape;
+use URI::Split qw(uri_split uri_join);
+
+use English;
+use Module::Build;
 
 my $build = Module::Build->current;
 
@@ -31,41 +32,22 @@ my ($fb, $feeds, $feedinfo, $feed);
 
 {
 	$feeds = $fb->find_feeds();
+	ok($feeds, 'use find_feeds to get the first feed for a user -- good');
 	$feed = (sort keys %{$feeds})[0];
-	diag "Using feed id $feed\n";
-	ok($feeds);
 }
 
 {
 	$feedinfo = $fb->get_feed($feed);
-	ok($feedinfo);
+	ok($feedinfo, 'use get_feed to get the feeds info -- good');
 }
 
 {
-	my ($feedxml);
-	$feedxml = newxml($fb->{'rawxml'});
-	ok($feedxml);
-	ok($fb->modify_feed($feedxml));
+	my ($scheme, $auth, $path, $query, $frag) = uri_split(uri_unescape($feedinfo->{'url'}));
+	my $uri = $feedinfo->{'url'} . ($query ? '&' : '?') . 'fbtest=' . time;
+	ok($fb->modify_feed_source($feedinfo->{'id'}, $uri), 'update the source url for a feed -- good');
 }
 
-sub newxml {
-	my ($string) = @_;
-	my $parser = XML::LibXML->new();
-	my $doc = $parser->parse_string($string);
-	my $docroot = $doc->documentElement();
-	my ($feednode);
-	if ($docroot->localname ne 'feed') {
-		map { if ($_->localname && $_->localname eq 'feed') { $feednode = $_; } } $docroot->childNodes;
-	} else {
-		$feednode = $docroot;
-	}
-	my $sourcenode; map { if ($_->localname && $_->localname eq 'source') { $sourcenode = $_; } } $feednode->childNodes;
-	my $urlattr; map { $urlattr = $_ } $sourcenode->attributes();
-	my $newurl = $urlattr->getValue() . '?time=' . time;
-	diag "Setting to new url $newurl\n";
-	$urlattr->setValue($newurl);
-	my $dom = XML::LibXML::Document->new();
-	$dom->setDocumentElement( $feednode );
-	return $dom->toString;
+SKIP: {
+	skip 'This does not work for some reason.', 1;
+	ok($fb->resync_feed($feed), 'use resync_feed to have FB resync it -- good');
 }
-
