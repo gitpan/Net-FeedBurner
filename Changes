@@ -15,3 +15,8 @@ Revision history for Net-FeedBurner
         Added helper function 'modify_feed_source'
         Added more (better) tests
         Extended test coverage to 78%
+
+0.8		2006-06-09 13:33 pm
+        Cleaned and fixed bugs with add_feed and delete_feed
+        Added more (better) tests -- adding and removing
+        Extended test coverage to 88%

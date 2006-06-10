@@ -8,7 +8,7 @@ use strict;
 use LWP::UserAgent;
 use XML::Simple;
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 
 my %xmlencode = (
     q{&} => 'amp',
@@ -39,30 +39,30 @@ sub init {
 	$self->{'ua'} = LWP::UserAgent->new;
 	$self->{'valid_requests'} = {
 		'FindFeeds' => {
-			'url' => 'https://api.feedburner.com/management/1.0/FindFeeds',
+			'url' => 'http://api.feedburner.com/management/1.0/FindFeeds',
 			'args' => [qw/user password/],
 		},
 		'GetFeed' => {
-			'url' => 'https://api.feedburner.com/management/1.0/GetFeed',
+			'url' => 'http://api.feedburner.com/management/1.0/GetFeed',
 			'args' => [qw/user password id/],
 		},
 		'AddFeed' => {
-			'url' => 'https://api.feedburner.com/management/1.0/AddFeed',
+			'url' => 'http://api.feedburner.com/management/1.0/AddFeed',
 			'args' => [qw/user password feed/],
 			'type' => 'post',
 		},
 		'DeleteFeed' => {
-			'url' => 'https://api.feedburner.com/management/1.0/DeleteFeed',
+			'url' => 'http://api.feedburner.com/management/1.0/DeleteFeed',
 			'args' => [qw/user password id/],
 			'type' => 'post',
 		},
 		'ResyncFeed' => {
-			'url' => 'https://api.feedburner.com/management/1.0/ResyncFeed',
+			'url' => 'http://api.feedburner.com/management/1.0/ResyncFeed',
 			'args' => [qw/user password id/],
 			'type' => 'post',
 		},
 		'ModifyFeed' => {
-			'url' => 'https://api.feedburner.com/management/1.0/ModifyFeed',
+			'url' => 'http://api.feedburner.com/management/1.0/ModifyFeed',
 			'args' => [qw/user password feed/],
 			'type' => 'post',
 		},
@@ -93,14 +93,17 @@ sub request {
 	if (! $response->is_success) {
 		die join q{}, 'Bad response: ', $response->code, ' - ', $response->status_line, ' - ', $args{'url'};
 	}
-	my $xs = XML::Simple->new();
-	my $ref = $xs->XMLin($response->content, %{$args{'xargs'}});
-	if ($ref->{'stat'} ne 'ok') {
-		print STDERR Data::Dumper::Dumper($ref);
-		print STDERR $response->content;
-		die 'ERROR ' . $ref->{'err'}->{'code'} . ' - ' . $ref->{'err'}->{'msg'};
+	my $ref = undef;
+	if ($response->content) {
+		my $xs = XML::Simple->new();
+		$ref = $xs->XMLin($response->content, %{$args{'xargs'}});
+		if ($ref->{'stat'} ne 'ok') {
+			print STDERR Data::Dumper::Dumper($ref);
+			print STDERR $response->content;
+			die 'ERROR ' . $ref->{'err'}->{'code'} . ' - ' . $ref->{'err'}->{'msg'};
+		}
+		$self->{'rawxml'} = $response->content;
 	}
-	$self->{'rawxml'} = $response->content;
 	return $ref;
 }
 
@@ -164,10 +167,12 @@ sub delete_feed {
 		'url' => $self->urlbuilder('DeleteFeed'),
 		'form' => {
 			'id' => $id,
+			'user' => $self->{'user'},
+			'password' => $self->{'password'},
 		},
 		'type' => 'post',
 	);
-	return 0;
+	return 1;
 }
 
 sub modify_feed {
@@ -204,6 +209,8 @@ sub resync_feed {
 		'url' => $self->urlbuilder('ResyncFeed'),
 		'form' => {
 			'id' => $id,
+			'user' => $self->{'user'},
+			'password' => $self->{'password'},
 		},
 		'type' => 'post',
 	);
