@@ -11,3 +11,4 @@ t/06-perl_critic.t
 t/11-new.t
 t/12-functions.t
 t/20-usage.t
+t/21-awapi.t

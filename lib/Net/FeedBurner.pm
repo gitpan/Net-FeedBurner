@@ -2,13 +2,14 @@
 
 package Net::FeedBurner;
 
-use warnings;
 use strict;
+use warnings;
 
+use English '-no_match_vars';
 use LWP::UserAgent;
 use XML::Simple;
 
-our $VERSION = '0.08';
+our $VERSION = '0.09';
 
 my %xmlencode = (
     q{&} => 'amp',
@@ -38,33 +39,44 @@ sub init {
 	my ($self) = @_;
 	$self->{'ua'} = LWP::UserAgent->new;
 	$self->{'valid_requests'} = {
+		## API
 		'FindFeeds' => {
-			'url' => 'http://api.feedburner.com/management/1.0/FindFeeds',
+			'url' => 'api.feedburner.com/management/1.0/FindFeeds',
 			'args' => [qw/user password/],
 		},
 		'GetFeed' => {
-			'url' => 'http://api.feedburner.com/management/1.0/GetFeed',
+			'url' => 'api.feedburner.com/management/1.0/GetFeed',
 			'args' => [qw/user password id/],
 		},
 		'AddFeed' => {
-			'url' => 'http://api.feedburner.com/management/1.0/AddFeed',
+			'url' => 'api.feedburner.com/management/1.0/AddFeed',
 			'args' => [qw/user password feed/],
 			'type' => 'post',
 		},
 		'DeleteFeed' => {
-			'url' => 'http://api.feedburner.com/management/1.0/DeleteFeed',
+			'url' => 'api.feedburner.com/management/1.0/DeleteFeed',
 			'args' => [qw/user password id/],
 			'type' => 'post',
 		},
 		'ResyncFeed' => {
-			'url' => 'http://api.feedburner.com/management/1.0/ResyncFeed',
+			'url' => 'api.feedburner.com/management/1.0/ResyncFeed',
 			'args' => [qw/user password id/],
 			'type' => 'post',
 		},
 		'ModifyFeed' => {
-			'url' => 'http://api.feedburner.com/management/1.0/ModifyFeed',
+			'url' => 'api.feedburner.com/management/1.0/ModifyFeed',
 			'args' => [qw/user password feed/],
 			'type' => 'post',
+		},
+		## AwAPI
+		'GetFeedData' => {
+			'url' => 'api.feedburner.com/awareness/1.0/GetFeedData',
+		},
+		'GetItemData' => {
+			'url' => 'api.feedburner.com/awareness/1.0/GetItemData',
+		},
+		'GetResyndicationData' => {
+			'url' => 'api.feedburner.com/awareness/1.0/GetResyndicationData',
 		},
 	};
 	return 1;
@@ -75,10 +87,12 @@ sub urlbuilder {
 	if (! $self->{'valid_requests'}{$type}) {
 		die 'Requesting unknown request type : '.$type;
 	}
-	my $url = $self->{'valid_requests'}{$type}{'url'};
-	if ($self->{'valid_requests'}{$type}{'args'} && ! $self->{'valid_requests'}{$type}{'type'}) {
-		$url .= q{?}.(join q{&}, map { $_.q{=}.($self->{$_} || $args{$_} || q{})  } @{ $self->{'valid_requests'}{$type}{'args'} } );
+	my $url = ( $self->{'secure'} ? 'https://' : 'http://') . $self->{'valid_requests'}{$type}{'url'};
+	my %rargs = map { $_ => 1 } @{$self->{'valid_requests'}{$type}{'args'}}, keys %args;
+	if (! $self->{'valid_requests'}{$type}{'type'}) {
+		$url .= q{?}.(join q{&}, map { $_.q{=}.($self->{$_} || $args{$_} || q{})  } sort keys %rargs );
 	}
+	$self->{'url'} = $url;
 	return $url;
 }
 
@@ -95,14 +109,15 @@ sub request {
 	}
 	my $ref = undef;
 	if ($response->content) {
+		$self->{'rawxml'} = $response->content;
 		my $xs = XML::Simple->new();
 		$ref = $xs->XMLin($response->content, %{$args{'xargs'}});
 		if ($ref->{'stat'} ne 'ok') {
-			print STDERR Data::Dumper::Dumper($ref);
-			print STDERR $response->content;
+			# NOTE: both the url and content are exposed:
+			#       print STDERR $self->{'url'} . "\n";
+			#       print STDERR $self->{'rawxml'} . "\n";
 			die 'ERROR ' . $ref->{'err'}->{'code'} . ' - ' . $ref->{'err'}->{'msg'};
 		}
-		$self->{'rawxml'} = $response->content;
 	}
 	return $ref;
 }
@@ -116,9 +131,8 @@ sub find_feeds {
 			'ForceArray' => [qw/feed/],
 		}
 	);
-	my %feeds;
-	map {
-		$feeds{$_->{'id'}} = {
+	my %feeds = map {
+		$_->{'id'} => {
 			'id' => $_->{'id'},
 			'title' => $_->{'title'},
 			'uri' => $_->{'uri'},
@@ -199,8 +213,7 @@ sub modify_feed_source {
 	my $origfeed = $self->get_feed($id);
     my $newfeedxml = '<feed id="' . $id . '" uri="' . $origfeed->{'uri'} . '" title="' . $origfeed->{'title'} . '"><source url="' . $self->_process($newurl) . '" /></feed>';
 	my $newfeed = $self->modify_feed($newfeedxml);
-	if (! $newfeed) { return 0; }
-    return $newfeed->{'id'} eq $origfeed->{'id'} ? 1 : 0;
+    return 1;
 }
 
 sub resync_feed {
@@ -215,6 +228,66 @@ sub resync_feed {
 		'type' => 'post',
 	);
 	return 1;
+}
+
+sub feed_stats {
+	my ($self, %args) = @_;
+	if (! $args{'uri'}) {
+		die 'You must submit a uri to continue.';
+	}
+	my %uargs = ( 'uri' => $args{'uri'} );
+	if ($args{'dates'}) {
+		my @datekeys = keys %{$args{'dates'}};
+		if (scalar @datekeys > 1) {
+			$uargs{'dates'} = join q{&dates=}, map { $_ . q{,} . $args{'dates'}{$_} } @datekeys;
+		} else {
+			$uargs{'dates'} = join q{}, map { $_ . q{,} . $args{'dates'}{$_} } @datekeys;
+		}
+	}
+	my $ref = $self->request(
+		'url' => $self->urlbuilder('GetFeedData', %uargs),
+	);
+	return $ref->{'feed'};
+}
+
+sub feeditem_stats {
+	my ($self, %args) = @_;
+	if (! $args{'uri'}) {
+		die 'You must submit a uri to continue.';
+	}
+	my %uargs = ( 'uri' => $args{'uri'} );
+	if ($args{'dates'}) {
+		my @datekeys = keys %{$args{'dates'}};
+		if (scalar @datekeys > 1) {
+			$uargs{'dates'} = join q{&dates=}, map { $_ . q{,} . $args{'dates'}{$_} } @datekeys;
+		} else {
+			$uargs{'dates'} = join q{}, map { $_ . q{,} . $args{'dates'}{$_} } @datekeys;
+		}
+	}
+	my $ref = $self->request(
+		'url' => $self->urlbuilder('GetItemData', %uargs),
+	);
+	return $ref->{'feed'};
+}
+
+sub resyndication_stats {
+	my ($self, %args) = @_;
+	if (! $args{'uri'}) {
+		die 'You must submit a uri to continue.';
+	}
+	my %uargs = ( 'uri' => $args{'uri'} );
+	if ($args{'dates'}) {
+		my @datekeys = keys %{$args{'dates'}};
+		if (scalar @datekeys > 1) {
+			$uargs{'dates'} = join q{&dates=}, map { $_ . q{,} . $args{'dates'}{$_} } @datekeys;
+		} else {
+			$uargs{'dates'} = join q{}, map { $_ . q{,} . $args{'dates'}{$_} } @datekeys;
+		}
+	}
+	my $ref = $self->request(
+		'url' => $self->urlbuilder('GetResyndicationData', %uargs),
+	);
+	return $ref->{'feed'};
 }
 
 1;
@@ -292,6 +365,27 @@ informing the caller of any feed formatting problems.
 A non-standard function to assist in changing the source url of a FeedBurner
 feed.
 
+=head1 Awareness API
+
+The Awareness API allows developers to get meaningfull information about a
+feed. Note that the AwAPI needs to be explicitly enabled for these funtions to
+work.
+
+See t/21-awapi.t for detailed usage examples.
+
+=head2 feed_stats
+
+This function returns the current basic feed awareness data.
+
+=head2 feeditem_stats
+
+This function returns the current basic feed awareness data for a specific
+item.
+
+=head2 resyndication_stats
+
+I'm not sure what this does, it looks interesting though.
+
 =head1 CAVEATS
 
 After a request it will store the original xmldata for later use.
@@ -325,7 +419,7 @@ You can also look for information at:
 
 =item * FeedBurner Developer Area
 
-L<http://www.feedburner.com/fb/a/api/management/docs>
+L<http://www.feedburner.com/fb/a/developers>
 
 =item * AnnoCPAN: Annotated CPAN documentation
 
@@ -352,6 +446,7 @@ documentation to the FeedBurner API.
 
   http://www.feedburner.com/fb/a/developers
   http://www.feedburner.com/fb/a/api/management/docs
+  http://www.feedburner.com/fb/a/developers/awapi
 
 =head1 COPYRIGHT & LICENSE
 

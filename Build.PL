@@ -10,9 +10,12 @@ my $builder = Module::Build->new(
 	dist_author         => 'Nick Gerakines <nick@socklabs.com>',
 	dist_version_from   => 'lib/Net/FeedBurner.pm',
 	build_requires => {
-		'Test::More' => 0,
 		'XML::Simple' => 0,
 		'LWP::UserAgent' => 0,
+	},
+	build_requires => {
+		'Test::More' => 0,
+		'Time::Format' => 0,
 		'URI::Escape' => 0,
 		'URI::Split' => 0,
 	},
