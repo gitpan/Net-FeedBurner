@@ -9,7 +9,7 @@ use English '-no_match_vars';
 use LWP::UserAgent;
 use XML::Simple;
 
-our $VERSION = '0.09';
+our $VERSION = '0.10';
 
 my %xmlencode = (
     q{&} => 'amp',

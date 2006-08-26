@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name: Net-FeedBurner
-version: 0.09
+version: 0.10
 author:
   - Nick Gerakines <nick@socklabs.com>
 abstract: The great new Net::FeedBurner!
