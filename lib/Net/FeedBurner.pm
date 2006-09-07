@@ -9,7 +9,7 @@ use English '-no_match_vars';
 use LWP::UserAgent;
 use XML::Simple;
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 my %xmlencode = (
     q{&} => 'amp',
@@ -33,6 +33,18 @@ sub new {
 	my $self = bless { %args }, $class;
 	$self->init();
 	return $self;
+}
+
+sub locale_filter {
+    my ($self, $url) = @_;
+    if (! exists $self->{'locale'}) {
+        return $url;
+    }
+    if ($self->{'locale'} eq 'jp') {
+        $url =~ s/\.com/\.jp/xm;
+        return $url;
+    }
+    return $url;
 }
 
 sub init {
@@ -87,7 +99,7 @@ sub urlbuilder {
 	if (! $self->{'valid_requests'}{$type}) {
 		die 'Requesting unknown request type : '.$type;
 	}
-	my $url = ( $self->{'secure'} ? 'https://' : 'http://') . $self->{'valid_requests'}{$type}{'url'};
+	my $url = $self->locale_filter(( $self->{'secure'} ? 'https://' : 'http://') . $self->{'valid_requests'}{$type}{'url'});
 	my %rargs = map { $_ => 1 } @{$self->{'valid_requests'}{$type}{'args'}}, keys %args;
 	if (! $self->{'valid_requests'}{$type}{'type'}) {
 		$url .= q{?}.(join q{&}, map { $_.q{=}.($self->{$_} || $args{$_} || q{})  } sort keys %rargs );
@@ -321,6 +333,14 @@ abstraction layer to make using the FeedBurner API easier for perl developers.
 =head2 new
 
 Creates and returns a Net::FeedBurner object.
+
+=head2 locale_filter
+
+Given by Takatsugu Shigeta to allow users to set a flag that switches between
+feedburner.jp and feedburner.com (us.)
+
+  my $fb = Net::FeeBurner->new( 'locale' => 'jp', ... );
+  # ...
 
 =head2 init
 

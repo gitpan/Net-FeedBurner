@@ -20,3 +20,8 @@ Revision history for Net-FeedBurner
         Cleaned and fixed bugs with add_feed and delete_feed
         Added more (better) tests -- adding and removing
         Extended test coverage to 88%
+
+0.11    2006-09-07 09:16 am
+        Applied patch from Takatsugu Shigeta
+        Bumped version up
+        Added tests and documentation
