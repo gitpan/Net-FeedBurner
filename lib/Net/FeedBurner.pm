@@ -1,15 +1,15 @@
-# $Id: $ $Revision: $ $Source: $ $Date: $
-
 package Net::FeedBurner;
 
 use strict;
 use warnings;
 
-use English '-no_match_vars';
 use LWP::UserAgent;
 use XML::Simple;
 
-our $VERSION = '0.11';
+use constant BASE_EN => 'api.feedburner.com';
+use constant BASE_JP => 'api.feedburner.jp';
+
+our $VERSION = '0.12';
 
 my %xmlencode = (
     q{&} => 'amp',
@@ -21,6 +21,7 @@ my %xmlencode = (
 
 my $xmlpattern = join q{|}, keys %xmlencode;
 
+# TODO: This should relaly be done with actual dom
 sub _process {
     my ($class, @xmldata) = @_;
     my $data = join q{}, map { defined $_ ? $_ : q{} } @xmldata;
@@ -30,65 +31,67 @@ sub _process {
 
 sub new {
 	my ($class, %args) = @_;
+    if (! exists $args{'locale'}) { $args{'locale'} = 'en'; }
 	my $self = bless { %args }, $class;
 	$self->init();
 	return $self;
 }
 
-sub locale_filter {
+sub locale_base {
     my ($self, $url) = @_;
-    if (! exists $self->{'locale'}) {
-        return $url;
+    my $prefix = $self->{'secure'} ? 'https://' : 'http://';
+    if ($self->{'locale'} && $self->{'locale'} eq 'en') {
+        return $prefix . BASE_EN;
     }
-    if ($self->{'locale'} eq 'jp') {
-        $url =~ s/\.com/\.jp/xm;
-        return $url;
+    if ($self->{'locale'} && $self->{'locale'} eq 'jp') {
+        return $prefix . BASE_JP;
     }
-    return $url;
+    return $prefix . BASE_EN;
 }
 
 sub init {
 	my ($self) = @_;
 	$self->{'ua'} = LWP::UserAgent->new;
+	# TODO: Move these to class constants
 	$self->{'valid_requests'} = {
 		## API
 		'FindFeeds' => {
-			'url' => 'api.feedburner.com/management/1.0/FindFeeds',
+			'url' => '/management/1.0/FindFeeds',
 			'args' => [qw/user password/],
 		},
 		'GetFeed' => {
-			'url' => 'api.feedburner.com/management/1.0/GetFeed',
+			'url' => '/management/1.0/GetFeed',
 			'args' => [qw/user password id/],
 		},
 		'AddFeed' => {
-			'url' => 'api.feedburner.com/management/1.0/AddFeed',
+			'url' => '/management/1.0/AddFeed',
 			'args' => [qw/user password feed/],
 			'type' => 'post',
 		},
 		'DeleteFeed' => {
-			'url' => 'api.feedburner.com/management/1.0/DeleteFeed',
+			'url' => '/management/1.0/DeleteFeed',
 			'args' => [qw/user password id/],
 			'type' => 'post',
 		},
 		'ResyncFeed' => {
-			'url' => 'api.feedburner.com/management/1.0/ResyncFeed',
+			'url' => '/management/1.0/ResyncFeed',
 			'args' => [qw/user password id/],
 			'type' => 'post',
 		},
 		'ModifyFeed' => {
-			'url' => 'api.feedburner.com/management/1.0/ModifyFeed',
+			'url' => '/management/1.0/ModifyFeed',
 			'args' => [qw/user password feed/],
 			'type' => 'post',
 		},
 		## AwAPI
 		'GetFeedData' => {
-			'url' => 'api.feedburner.com/awareness/1.0/GetFeedData',
+			'url' => '/awareness/1.0/GetFeedData',
 		},
 		'GetItemData' => {
-			'url' => 'api.feedburner.com/awareness/1.0/GetItemData',
+			'url' => '/awareness/1.0/GetItemData',
 		},
 		'GetResyndicationData' => {
-			'url' => 'api.feedburner.com/awareness/1.0/GetResyndicationData',
+			'url' => '/awareness/1.0/GetResyndicationData',
 		},
 	};
 	return 1;
@@ -97,9 +100,9 @@ sub init {
 sub urlbuilder {
 	my ($self, $type, %args) = @_;
 	if (! $self->{'valid_requests'}{$type}) {
-		die 'Requesting unknown request type : '.$type;
+		die 'Requesting unknown request type : ' . $type;
 	}
-	my $url = $self->locale_filter(( $self->{'secure'} ? 'https://' : 'http://') . $self->{'valid_requests'}{$type}{'url'});
+	my $url = $self->locale_base() . $self->{'valid_requests'}{$type}{'url'};
 	my %rargs = map { $_ => 1 } @{$self->{'valid_requests'}{$type}{'args'}}, keys %args;
 	if (! $self->{'valid_requests'}{$type}{'type'}) {
 		$url .= q{?}.(join q{&}, map { $_.q{=}.($self->{$_} || $args{$_} || q{})  } sort keys %rargs );
@@ -220,6 +223,7 @@ sub modify_feed {
 	return \%feed;
 }
 
+# TODO: This shouldn't be stringified
 sub modify_feed_source {
 	my ($self, $id, $newurl) = @_;
 	my $origfeed = $self->get_feed($id);
@@ -334,13 +338,14 @@ abstraction layer to make using the FeedBurner API easier for perl developers.
 
 Creates and returns a Net::FeedBurner object.
 
-=head2 locale_filter
+Required arguments: user, password
 
-Given by Takatsugu Shigeta to allow users to set a flag that switches between
+Optional arguments: locale
+
+The locale option allows users to set a flag that switches between
 feedburner.jp and feedburner.com (us.)
 
   my $fb = Net::FeeBurner->new( 'locale' => 'jp', ... );
-  # ...
 
 =head2 init
 
@@ -467,6 +472,8 @@ documentation to the FeedBurner API.
   http://www.feedburner.com/fb/a/developers
   http://www.feedburner.com/fb/a/api/management/docs
   http://www.feedburner.com/fb/a/developers/awapi
+
+Special thanks to Takatsugu Shigeta for the first rev of the locale filter.
 
 =head1 COPYRIGHT & LICENSE
 
